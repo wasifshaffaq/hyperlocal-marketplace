@@ -1,0 +1,30 @@
+# =========================
+# Node.js Backend
+# =========================
+backend/node_modules/
+backend/dist/
+backend/build/
+backend/.env
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Android / Kotlin
+# =========================
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild
+.cxx
+local.properties
+
+# =========================
+# OS / IDE Files
+# =========================
+.vscode/
+Thumbs.db
