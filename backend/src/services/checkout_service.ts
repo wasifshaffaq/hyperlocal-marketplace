@@ -10,7 +10,7 @@ const MockPaymentGateway = {
 };
 
 export const processCheckout = async (dbPool: Pool, userId: string, payload: any) => {
-    const { shopId, cartItems, slotId, paymentDetails } = payload;
+    const { shopId, addressId, cartItems, slotId, paymentDetails } = payload;
     const client: PoolClient = await dbPool.connect();
 
     try {
@@ -43,9 +43,9 @@ export const processCheckout = async (dbPool: Pool, userId: string, payload: any
         if (!paymentResult.success) throw new Error(`Payment failed: ${paymentResult.error}`);
 
         const orderRes = await client.query(`
-            INSERT INTO orders (customer_id, shop_id, slot_id, delivery_type, subtotal, delivery_fee, tax, total, payment_status)
-            VALUES ($1, $2, $3, 'DELIVERY', $4, $5, $6, $7, 'CAPTURED') RETURNING id
-        `, [userId, shopId, slotId, cartSubtotal, deliveryFee + premiumFee, tax, finalTotal]);
+            INSERT INTO orders (customer_id, shop_id, address_id, slot_id, delivery_type, subtotal, delivery_fee, tax, total, payment_status)
+            VALUES ($1, $2, $3, $4, 'DELIVERY', $5, $6, $7, $8, 'CAPTURED') RETURNING id
+        `, [userId, shopId, addressId, slotId, cartSubtotal, deliveryFee + premiumFee, tax, finalTotal]);
         
         const orderId = orderRes.rows[0].id;
         await client.query(`INSERT INTO payment_transactions (order_id, gateway_ref, amount, status) VALUES ($1, $2, $3, 'CAPTURED')`, [orderId, paymentResult.transactionId, finalTotal]);

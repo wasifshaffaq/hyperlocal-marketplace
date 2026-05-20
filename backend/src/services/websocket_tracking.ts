@@ -44,7 +44,7 @@ export const initializeTrackingSockets = (server: http.Server, jwtSecret: string
     });
 };
 
-const broadcastToOrder = (orderId: string, payload: WSPayload, excludeWs?: WebSocket) => {
+export const broadcastToOrder = (orderId: string, payload: WSPayload, excludeWs?: WebSocket) => {
     const channel = orderChannels.get(orderId);
     if (channel) {
         const message = JSON.stringify(payload);

@@ -1,172 +1,290 @@
-# 🛒 Hyperlocal Marketplace Architecture
+# 📍 HyperLocal Marketplace (API + Real-Time Dispatch Engine)
 
-<div align="center">
-  <img src="https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android" />
-  <img src="https://img.shields.io/badge/Kotlin-0095D5?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin" />
-  <img src="https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" />
-  <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
-</div>
+[![Next.js 15+](https://img.shields.io/badge/Next.js-15+-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TailwindCSS v4](https://img.shields.io/badge/TailwindCSS-v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Express.js](https://img.shields.io/badge/Express.js-4-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
+[![WebSocket](https://img.shields.io/badge/WebSocket-WS-010101?style=for-the-badge&logo=socketdotio&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
+[![Framer Motion](https://img.shields.io/badge/Framer_Motion-Animated-8A2BE2?style=for-the-badge&logo=framer&logoColor=white)](https://www.framer.com/motion/)
 
-<br/>
-
-A production-grade, highly scalable hyperlocal marketplace platform. Engineered with a strict **Clean Architecture**, this system handles real-time live map tracking, transactional inventory locking, and offline-first mobile caching.
-
-## ✨ Core Architecture Highlights
-
-* **Offline-First Edge Caching:** Implements the Network-Bound Resource pattern using Room DB (SQLite) to ensure the app functions seamlessly during network drops.
-* **Real-Time State Machines:** Targeted WebSocket Pub/Sub routing for instant order progression and Uber-like driver map tracking.
-* **Transactional Integrity:** Utilizes PostgreSQL `FOR UPDATE NOWAIT` row-level locking to prevent race conditions and inventory overselling during checkout.
-* **Spatial Queries:** Powered by PostGIS for lightning-fast, radius-based merchant discovery.
-* **Multi-Channel Notifications:** Concurrent `Promise.allSettled` execution of FCM Push Notifications and Twilio SMS for fault-tolerant alerting.
+An advanced, full-stack, production-grade hyperlocal logistics and marketplace application. The platform connects consumers with nearby merchants, handles transactional checkouts with row-level locking inventory, and maps delivery couriers live using WebSockets, custom 2D canvas interpolation rendering (LERP), and glassmorphism.
 
 ---
 
-## 🚀 Hyperlocal Marketplace: Windows 10 Deployment Guide
+## 🌟 Key Highlights & Innovations
 
-As a DevOps Engineer, the cleanest way to run this on Windows 10 without cluttering your system registry is to containerize the database and run the backend locally.
+### 1. Dual-Mode Resilient Database Layer (`db.ts`)
+- **Autodetect PG/PostGIS Engine:** The system dynamically attempts to initiate a pooled connection to PostgreSQL/PostGIS.
+- **Failover Mock DB State Machine:** If PostgreSQL is offline or inaccessible, the application automatically triggers an in-memory database simulation client. This mock client supports SQL query normalization, ACID transaction mocks (`BEGIN`, `COMMIT`, `ROLLBACK`), row-level locks (`FOR UPDATE NOWAIT`), and spatial distance mathematical queries using the Haversine formula.
 
-### Phase 1: Environment Preparation
+### 2. High-Fidelity 2D Canvas Mapping Engine
+- Built from scratch without heavy map wrapper dependencies (like Google Maps or Mapbox).
+- Renders customer geolocations, shops, pulsing delivery coverage radiuses, and active drivers.
+- **Vector Interpolation (LERP):** Sub-second coordinates broadcast from the backend are interpolated smoothly inside a requestAnimationFrame rendering loop to make courier markers glide seamlessly across streets.
+- Full viewport pan-dragging and scroll-wheel zoom scaling.
 
-**Enable WSL2 & Docker Desktop:**
-* If you haven't already, install Docker Desktop for Windows.
-* Ensure it is configured to use the WSL2 backend (`Settings -> General -> Use the WSL 2 based engine`).
-* *Optional but recommended for an Arch user:* You can actually install Arch Linux on WSL2, but default Ubuntu works perfectly for the Node.js runtime.
+### 3. State-Machine Dispatch Simulation Daemon
+- Runs asynchronous simulation threads representing delivery couriers.
+- Coordinates progression updates: `PLACED` ➔ `CONFIRMED` ➔ `PREPARING` ➔ `READY_FOR_PICKUP` ➔ `OUT_FOR_DELIVERY` (generates spatial steps from shop to customer) ➔ `DELIVERED`.
+- Secure WebSocket dispatch channels using bearer JSON Web Tokens.
 
-**Install Node.js & TypeScript:**
-* Install Node.js (v20+ recommended) either via `nvm-windows` natively or inside your WSL2 distro.
-* Install TypeScript globally: 
-  ```bash
-  npm install -g typescript ts-node
-  ```
+---
 
-**Install Android Studio:**
-* Download and install Android Studio.
-* Set up an Android Virtual Device (AVD) running API 34.
+## 🏗️ System Architecture
 
-### Phase 2: Database Deployment (PostgreSQL + PostGIS)
+```mermaid
+graph TD
+    subgraph Frontend [Next.js App Client - Port 3001]
+        UI[Glassmorphic Auth / UI panels] --> FM[Framer Motion Animations]
+        UI --> Map[Interactive Canvas Map]
+        Map --> WSClient[WebSocket Client /ws/tracking]
+    end
 
-Running PostGIS natively on Windows is notoriously messy. We will use a `docker-compose.yml` file to spin it up perfectly.
+    subgraph Backend [Express API & WS Gateway - Port 3000]
+        API[Express Router /api/*] --> Auth[JWT Token guards]
+        WS[WebSocket Server /ws/tracking] --> Tracking[Pub/Sub Broadcast State Machine]
+        Sim[Simulation Runner Daemon] --> Tracking
+        API --> DB[Resilient Database Pool Manager]
+    end
 
-1. Navigate to your generated project folder in PowerShell or WSL:
+    subgraph Storage [Database Storage Engine]
+        DB -->|Connect Pool| PG[(PostgreSQL + PostGIS)]
+        DB -->|Fallback| MockDB[(In-Memory Mock State Machine)]
+    end
+    
+    WSClient <-->|Live Coordinates| WS
+```
+
+---
+
+## 📁 Repository Directory Structure
+
+```
+├── backend/                   # Node.js + Express API & WS server code
+│   ├── src/
+│   │   ├── services/
+│   │   │   ├── checkout_service.ts     # Row-locked transactional order checkout
+│   │   │   ├── notification_service.ts # SMS / push broadcast channels
+│   │   │   └── websocket_tracking.ts   # WS pub/sub coordination
+│   │   ├── db.ts                       # Dual-mode PG pool + Mock SQL client
+│   │   ├── server.ts                   # App endpoints & driver simulation threads
+│   │   ├── api.test.ts                 # Full E2E service integration tests
+│   │   └── verify.test.ts              # Unit and WS handshake tests
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── frontend/                  # Next.js App Router SPA Client
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── checkout/               # Checkout Summary & Payment Form Page
+│   │   │   ├── dashboard/              # Shop Browser Grid & Interactive Map Page
+│   │   │   ├── owner/                  # Shop Owner Command Dashboard Page
+│   │   │   ├── tracking/[id]/          # WebSocket Gliding Live Courier Page
+│   │   │   ├── globals.css             # Tailwind v4 variables and custom styles
+│   │   │   ├── layout.tsx              # Root Layout with Font Configurations
+│   │   │   └── page.tsx                # Welcome page & Canvas Particle Auth Screen
+│   │   ├── components/ui/             # shadcn reusable design tokens (button, card, etc.)
+│   │   └── lib/utils.ts                # Class merger tailwind helper
+│   ├── next.config.ts                  # API proxied rewrites config
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── task.md                    # Task and feature checklists
+└── walkthrough.md             # Integration testing logs
+```
+
+---
+
+## ⚙️ Ultimate Setup & Installation Guide
+
+### Prerequisites
+Make sure you have the following installed:
+1. [Node.js](https://nodejs.org/) (Version 18 or 20 recommended)
+2. [npm](https://www.npmjs.com/) (Version 9+ / bundled with Node.js)
+3. *(Optional)* [Docker Desktop](https://www.docker.com/) (to run PostgreSQL/PostGIS database image)
+
+---
+
+### Step 1: Clone the Codebase
+Clone this repository to your local folder and navigate into the root directory:
+```bash
+git clone https://github.com/wasifshaffaq/hyperlocal-marketplace.git
+cd hyperlocal-marketplace
+```
+
+---
+
+### Step 2: Configure and Boot the Backend Service
+1. Navigate to the backend directory:
    ```bash
-   cd hyperlocal-marketplace/backend/db
+   cd backend
    ```
-
-2. Create a `docker-compose.yml` file in that folder:
-   ```yaml
-   version: '3.8'
-   services:
-     db:
-       image: postgis/postgis:15-3.3
-       environment:
-         POSTGRES_USER: postgres
-         POSTGRES_PASSWORD: supersecretpassword
-         POSTGRES_DB: hyperlocal
-       ports:
-         - "5432:5432"
-       volumes:
-         - pgdata:/var/lib/postgresql/data
-   volumes:
-     pgdata:
-   ```
-
-3. Spin up the database:
+2. Install npm dependencies:
    ```bash
-   docker-compose up -d
+   npm install
    ```
-
-4. Apply the `schema.sql` to your new Docker database:
-   ```bash
-   docker exec -i $(docker-compose ps -q db) psql -U postgres -d hyperlocal < schema.sql
-   ```
-   *Your database is now live on `localhost:5432` with all schemas and indexes created.*
-
-### Phase 3: Backend Deployment (Node.js)
-
-1. Navigate to the backend source directory:
-   ```bash
-   cd ../src
-   ```
-
-2. Initialize the Node project and create a `tsconfig.json`:
-   ```bash
-   npm init -y
-   tsc --init
-   ```
-
-3. Install the required dependencies:
-   ```bash
-   # Core dependencies
-   npm install express ws jsonwebtoken pg express-rate-limit firebase-admin twilio
-
-   # TypeScript types (Dev dependencies)
-   npm install -D @types/express @types/ws @types/jsonwebtoken @types/pg @types/node
-   ```
-
-4. Create a `.env` file in the `src` directory with your local credentials:
+3. Create your local environment configuration file:
+   Create a `.env` file in the `backend/` folder and populate it:
    ```env
    PORT=3000
-   JWT_SECRET=super-secret-local-dev-key
-   PGUSER=postgres
-   PGPASSWORD=supersecretpassword
-   PGHOST=localhost
-   PGPORT=5432
-   PGDATABASE=hyperlocal
+   JWT_SECRET=super_secret_hyperlocal_json_web_token_key_1337
+   
+   # PostgreSQL Connection configurations (System automatically uses Mock DB if offline)
+   DB_USER=postgres
+   DB_HOST=localhost
+   DB_NAME=hyperlocal
+   DB_PASSWORD=postgres
+   DB_PORT=5432
    ```
-
-5. Start the server:
+4. Start the backend developer server:
    ```bash
-   ts-node server.ts
+   npm run dev
    ```
-   *You should see: `API + WS Server running on port 3000`.*
+   *Expected Console output:*
+   ```
+   API + WS Server running on port 3000
+   [DB] PostgreSQL offline. Resilient fallback activated: running MockInMemoryDatabase!
+   ```
 
-### Phase 4: Android App Deployment (Android Studio)
+---
 
-**Open the Project:**
-* Launch Android Studio.
-* Click Open and select the `hyperlocal-marketplace/android` directory.
+### Step 3: Configure and Launch the Next.js Frontend
+1. Open a new terminal console and navigate to the frontend directory:
+   ```bash
+   cd ../frontend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Launch the development server:
+   ```bash
+   npm run dev -- -p 3001
+   ```
+   *Note: Binding to `-p 3001` explicitly prevents conflicts with the backend port 3000.*
+4. Open your browser to **[http://localhost:3001](http://localhost:3001)**.
 
-**Add Dependencies:**
-Open your `app/build.gradle.kts` and ensure you have the required libraries:
-```kotlin
-dependencies {
-    // Compose Material 3
-    implementation("androidx.compose.material3:material3:1.2.0")
+---
 
-    // Maps
-    implementation("com.google.maps.android:maps-compose:4.3.0")
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
+## 🧪 Running Integration Tests
+The project features E2E Mocha tests. These tests spin up local Express routers, mount mock database schemas, perform socket handshakes, and run coordinate dispatches.
 
-    // Retrofit & OkHttp
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+To run the test suite:
+1. Open a terminal and navigate to `backend/`.
+2. Run:
+   ```bash
+   npm test
+   ```
 
-    // Room Database
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1") // Requires KSP plugin
+*Typical Test Output:*
+```
+--- Running Checkout Service Tests ---
+[PASS] Successful checkout returns success: true
+[PASS] Returns the correct generated orderId
+[PASS] Starts a transaction
+[PASS] Commits the transaction on success
+[PASS] Checkout fails with insufficient stock
+[PASS] Rolls back transaction on insufficient stock
+
+--- Running WebSocket Real-Time Tracking Tests ---
+[PASS] Connecting without token closes with code 1008
+[PASS] Connecting with invalid token closes with code 1008
+[PASS] Customer receives driver location updates in real-time
+```
+
+---
+
+## 📡 REST API & Websocket Protocol Contract
+
+### Auth Endpoints
+#### `POST /api/auth/register`
+Creates a user profile.
+- **Request Body:**
+  ```json
+  {
+    "email": "customer@test.com",
+    "password": "secure_password",
+    "role": "CUSTOMER",
+    "phone": "+15551234"
+  }
+  ```
+
+#### `POST /api/auth/login`
+Validates credentials and responds with a bearer token.
+- **Response:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "token": "JWT_TOKEN_STRING",
+      "role": "CUSTOMER",
+      "id": "user-uuid"
+    }
+  }
+  ```
+
+### Shop Discovery & Orders
+#### `GET /api/shops?lat=37.7749&lng=-122.4194`
+Returns stores located inside the delivery bounds of the coordinate payload.
+
+#### `POST /api/checkout`
+Submits checkout cart details securely using row locks on product items.
+- **Request Body:**
+  ```json
+  {
+    "shopId": "shop-grocery",
+    "addressId": "address-uuid",
+    "slotId": "slot-standard",
+    "cartItems": [
+      { "productId": "prod-apple", "quantity": 3 }
+    ],
+    "paymentDetails": {
+      "cardNumber": "4242424242424242",
+      "cvv": "123",
+      "expiry": "12/28"
+    }
+  }
+  ```
+
+### WebSocket Dispatch Events
+Connect via: `ws://localhost:3000/ws/tracking`
+
+#### 1. Subscribe Packet (Client ➔ Server)
+```json
+{
+  "type": "subscribe",
+  "orderId": "order-uuid-here"
 }
 ```
 
-**The Localhost Emulator Rule (CRITICAL):**
-Since you are running the Node.js server on your Windows machine (`localhost:3000`), the Android Emulator cannot use localhost (that points to the emulator itself). Change the URL from localhost to the Android loopback IP:
-* `http://10.0.2.2:3000` *(for REST API)*
-* `ws://10.0.2.2:3000/ws/tracking` *(for WebSockets)*
+#### 2. Status Progression Broadcast (Server ➔ Client)
+```json
+{
+  "type": "STATUS_UPDATE",
+  "orderId": "order-uuid-here",
+  "status": "PREPARING"
+}
+```
 
-**Run the App:**
-* Select your API 34 Emulator and click the Green **Run** (Play) button.
-
-### 🛡️ Architecture Validation
-At this point:
-1. Your PostGIS database is running in Docker.
-2. Your Node/Express server is routing REST and WS traffic.
-3. Your Compose UI is rendering on the emulator.
-
-*If you encounter a `Cleartext HTTP traffic not permitted` error on Android (since we aren't using HTTPS locally), add `android:usesCleartextTraffic="true"` to your `<application>` tag in `AndroidManifest.xml`.*
+#### 3. Coordinate Update Broadcast (Server ➔ Client)
+```json
+{
+  "type": "LOCATION_UPDATE",
+  "orderId": "order-uuid-here",
+  "lat": 37.7771,
+  "lng": -122.4172
+}
+```
 
 ---
-<div align="center">
-  <i>Engineered for Performance and Scale.</i>
-</div>
+
+## 🛠️ Troubleshooting & FAQs
+
+| Symptom | Direct Cause | Corrective Action |
+|---|---|---|
+| `Port 3000 is already in use` | Another server instance is running on port 3000 | Find and terminate the process, or update the `PORT` env parameter in `.env` |
+| `WebSocket connection failed` | WS client tried to reach the wrong host or socket path | Ensure backend server is running and client connects to `ws://localhost:3000/ws/tracking` |
+| `Checkout fails with stock shortage` | The mock database limits item stock | Log in as Shop Owner, switch to the **Shop Menu Catalog** tab, and add stock to the product |
+| `Cannot connect to Postgres` | PostgreSQL daemon is offline | No action required! The application falls back to the high-end `MockInMemoryDatabase` without crashing |
